@@ -1,7 +1,8 @@
 '''
 跑一条数据
-输入：a/b/c.mp4
-输出：gvhmr_out/c
+args:
+- video，例如a/b/c.mp4
+- output_root，例如gvhmr_out/，结果输出在gvhmr_out/c
 '''
 
 import os

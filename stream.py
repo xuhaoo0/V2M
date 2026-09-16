@@ -1,3 +1,20 @@
 '''
-将所有流程串起来
+将所有流程串起来，只留统一的参数，并能根据参数判断
+args:
+- input_video，例如a/b/c.mp4
+- input_dir，例如a，会把a文件夹下的所有视频都跑一遍
+- output_dir，例如out，把所有输出放在这下面，并保持原有的目录结构
+- gpu，例如0，使用哪块显卡
+
+输出示例：
+out
+- a/b/c
+  - split
+    - c_001.mp4
+    - c_002.mp4
+  - gvhmr
+    - xxx.pt
+    - xxx.mp4
+    ...
+
 '''
