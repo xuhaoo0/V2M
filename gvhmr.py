@@ -24,7 +24,7 @@ subprocess.run(
         "--video",
         "/home/xuhao/data/sam3-main/dance/single/KG_kg_iconx/person1.mp4",  # 输入视频
         "--output_root",
-        str(v2m_root / "gvhmr_out"),  # 输出目录
+        str(v2m_root / "gvhmr_out"),  # 输出目录（最好不要修改）
     ],
     cwd=gvhmr_root,
     env=env,
