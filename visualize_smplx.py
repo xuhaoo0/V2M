@@ -167,7 +167,7 @@ def visualize(smplx_params, output_path, width, height, fps, device, camera_beta
 
 if __name__ == "__main__":
     # 直接在这里修改输入路径和渲染参数
-    input_path = Path("gvhmr_out/person1/hmr4d_results.pt")
+    input_path = Path("gvhmr_out/leg/leg_fix_leg.pt")
     output_path = input_path.parent / "visualize.mp4"
     width = 720
     height = 1280

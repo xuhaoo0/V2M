@@ -11,6 +11,6 @@ args:
 - smpl_file，例如a/b/c.pt
 
 输出：a/c.json，字段"float"
-- "true, N"表示存在悬空或穿地的错误，并且判定在第N帧开始悬空
-- "false"表示不存在
+- "exist, N"表示存在悬空或穿地的错误，并且判定在第N帧开始悬空
+- "nonexist"表示不存在
 '''
