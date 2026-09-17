@@ -26,10 +26,10 @@ out
 
 '''
 流程：
-split：切一条视频，参考宗宇的代码？【xxx】
+split：切一条视频，参考宗宇的代码？【未完成】
 gvhmr：重建一条视频（内含2D的左右腿修复）
-detect_leg：判断是否存在左右腿互换【未完成】【徐浩】
-detect_float：判断是否存在悬空或穿地【未完成】【徐浩】
-fix_interpenetration_VolumetricSMPL：用VolumetricSMPL判断是否存在穿模以及修正【xxx】
+detect_float：判断是否存在悬空或穿地
+fix_leg：判断是否存在左右腿互换
+fix_interpenetration_VolumetricSMPL：用VolumetricSMPL判断是否存在穿模以及修正
 fix_interpenetration_PoseShield：用PoseShield判断是否存在穿模以及修正【先不做，上面那个效果应该很好】
 '''
