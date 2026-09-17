@@ -1,3 +1,7 @@
+'''
+mov转mp4，并删除原mov文件
+'''
+
 import subprocess
 from pathlib import Path
 

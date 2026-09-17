@@ -166,13 +166,14 @@ def visualize(smplx_params, output_path, width, height, fps, device, camera_beta
 
 
 if __name__ == "__main__":
-    # 直接在这里修改输入路径和渲染参数
-    input_path = Path("gvhmr_out/leg/leg_fix_leg.pt")
-    output_path = input_path.parent / "visualize.mp4"
+    # 直接在这里修改输入路径
+    input_path = Path("gvhmr_out/inpenet/inpenet_fix_inpenet.pt")
+    output_path = input_path.with_suffix(".mp4")
+    device = "cuda"  # 没有显卡时改成 "cpu"
+
     width = 720
     height = 1280
     fps = 30
-    device = "cuda"  # 没有显卡时改成 "cpu"
     camera_beta = 3.0  # 数值越大，人物在画面中越小
     axis_length = 0.5  # 坐标轴长度，单位为米
 

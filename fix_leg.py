@@ -179,4 +179,4 @@ if __name__ == "__main__":
     device = "cuda"
 
     fix_frames = detect_leg(smpl_file, max_fix_frames, device)  # 检测功能
-    fix_leg(smpl_file, fix_frames)  # 修复功能
+    fix_leg(smpl_file, fix_frames)  # 修复功能，可以选择注释掉不用

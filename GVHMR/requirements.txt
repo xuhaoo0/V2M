@@ -37,6 +37,7 @@ pytorch3d @ https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py310_cu12
 trimesh
 chumpy
 smplx
+VolumetricSMPL==1.0.4
 # open3d==0.17.0
 wis3d
 pycolmap

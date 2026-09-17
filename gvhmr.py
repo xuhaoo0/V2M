@@ -3,10 +3,10 @@
 
 args:
 - video，例如a/b/c.mp4
-- output_root，例如gvhmr_out/
+- output_root，例如a/b/c
 
 输出：
-output_root/c文件夹，最重要的是里面的c.pt
+a/b/c/c文件夹，最重要的是里面的c.pt
 '''
 
 import os
@@ -19,7 +19,7 @@ v2m_root = Path(__file__).resolve().parent
 gvhmr_root = v2m_root / "GVHMR"
 
 # 超参数
-video = Path("/home/xuhao/data/V2M/leg.mp4")  # 要使用绝对路径
+video = Path("/home/xuhao/data/V2M/inpenet.mp4")  # 要使用绝对路径
 output_root = v2m_root / "gvhmr_out"
 
 env = os.environ.copy()
