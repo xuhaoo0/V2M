@@ -1,8 +1,8 @@
-"""可视化smplx动作。
+"""可视化smplx动作。【测试版】
 
 标准化规则：
 1. 将第一帧的根关节移动到 x=0、z=0；
-2. 将第一帧的网格最低点移动到 y=0；
+2. 将所有帧最低点排序，取较低一半的平均值作为地面并移动到 y=0；
 3. 绕 y 轴旋转整段动作，使第一帧面朝 +X。【一般是面朝+Z，为了测试这里临时用+X】
 
 后续帧不会再次落地，因此可以直接观察穿地和浮空。
@@ -21,9 +21,12 @@ from GVHMR.hmr4d.utils.vis.renderer import Renderer, get_global_cameras_static, 
 
 
 def standardize_motion(vertices, joints):
-    """以第一帧为基准平移和旋转整段动作。"""
+    """根据整段动作估计地面，并以第一帧为基准平移和旋转。"""
     offset = joints[0, 0].clone()
-    offset[1] = vertices[0, :, 1].min()
+    frame_min_y = vertices[..., 1].amin(dim=1)
+    sorted_min_y = frame_min_y.sort().values
+    ground_y = sorted_min_y[:len(sorted_min_y) // 2].mean()
+    offset[1] = ground_y
     vertices = vertices - offset
     joints = joints - offset
 
@@ -39,7 +42,7 @@ def standardize_motion(vertices, joints):
     rotate_z_to_x[2, 2] = 0
     vertices = apply_T_on_points(vertices, rotate_z_to_x)
     joints = apply_T_on_points(joints, rotate_z_to_x)
-    return vertices, joints
+    return vertices, joints, ground_y
 
 
 def create_coordinate_axes(length, device):
@@ -132,15 +135,15 @@ def visualize(smplx_params, output_path, width, height, fps, device, camera_beta
     vertices = smplx_output.vertices
     joints = smplx_output.joints[:, :22]
 
-    # 第一帧贴地并面朝 +X，后续所有帧使用同一个变换
-    vertices, joints = standardize_motion(vertices, joints)
+    # 使用整段动作估计地面并面朝 +X，后续所有帧使用同一个变换
+    vertices, joints, ground_y = standardize_motion(vertices, joints)
     vertices_cpu = vertices.cpu()
     joints_cpu = joints.cpu()
 
     frame_min_y = vertices_cpu[..., 1].amin(dim=1)
-    print(f"第一帧最低点：{frame_min_y[0]:.6f} m")
-    print(f"后续帧最低点范围：[{frame_min_y[1:].min():.4f}, {frame_min_y[1:].max():.4f}] m")
-    print(f"穿地帧数：{int((frame_min_y[1:] < -1e-4).sum())}/{len(frame_min_y) - 1}")
+    print(f"估计地面高度：{ground_y:.4f} m")
+    print(f"所有帧最低点范围：[{frame_min_y.min():.4f}, {frame_min_y.max():.4f}] m")
+    print(f"穿地帧数：{int((frame_min_y < -1e-4).sum())}/{len(frame_min_y)}")
 
     # 静态相机只负责构图，不再修改人体动作
     camera_R, camera_T, lights = get_global_cameras_static(

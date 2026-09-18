@@ -31,5 +31,5 @@ split：切一条视频，参考宗宇的代码？【未完成】
 gvhmr：重建一条视频（内含2D的左右腿修复）【完成】
 fix_leg：判断是否存在左右腿互换【没批量测试】
 fix_inpenet：用VolumetricSMPL判断是否存在穿模以及修正【没批量测试】
-detect_float：判断是否存在悬空或穿地
+detect_float：判断是否存在悬空或穿地【没批量测试】
 '''

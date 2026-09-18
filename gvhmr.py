@@ -19,7 +19,7 @@ v2m_root = Path(__file__).resolve().parent
 gvhmr_root = v2m_root / "GVHMR"
 
 # 超参数
-video = Path("/home/xuhao/data/V2M/inpenet.mp4")  # 要使用绝对路径
+video = Path("/home/xuhao/data/V2M/xk.mp4")  # 要使用绝对路径
 output_root = v2m_root / "gvhmr_out"
 
 env = os.environ.copy()

@@ -5,7 +5,7 @@ mov转mp4，并删除原mov文件
 import subprocess
 from pathlib import Path
 
-input_file = Path("leg.mov")
+input_file = Path("xk.mov")
 output_file = input_file.with_suffix(".mp4")
 
 subprocess.run(["ffmpeg", "-i", input_file, output_file], check=True)
