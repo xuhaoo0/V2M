@@ -3,7 +3,7 @@
 标准化规则：
 1. 将第一帧的根关节移动到 x=0、z=0；
 2. 将所有帧最低点排序，取较低一半的平均值作为地面并移动到 y=0；
-3. 绕 y 轴旋转整段动作，使第一帧面朝 +X。【一般是面朝+Z，为了测试这里临时用+X】
+3. 绕 y 轴旋转整段动作，根据参数使第一帧面朝 +X 或 +Z。【可在main里面选择】
 
 后续帧不会再次落地，因此可以直接观察穿地和浮空。
 """
@@ -20,7 +20,7 @@ from GVHMR.hmr4d.utils.video_io_utils import get_writer
 from GVHMR.hmr4d.utils.vis.renderer import Renderer, get_global_cameras_static, get_ground_params_from_points
 
 
-def standardize_motion(vertices, joints):
+def standardize_motion(vertices, joints, facing_direction):
     """根据整段动作估计地面，并以第一帧为基准平移和旋转。"""
     offset = joints[0, 0].clone()
     frame_min_y = vertices[..., 1].amin(dim=1)
@@ -30,18 +30,19 @@ def standardize_motion(vertices, joints):
     vertices = vertices - offset
     joints = joints - offset
 
-    # 先将第一帧标准化为面朝+Z，再绕y轴旋转90度，使其面朝+X。
+    # 先将第一帧标准化为面朝+Z
     transform = compute_T_ayfz2ay(joints[[0]], inverse=True)[0]
     vertices = apply_T_on_points(vertices, transform)
     joints = apply_T_on_points(joints, transform)
 
-    rotate_z_to_x = torch.eye(4, dtype=vertices.dtype, device=vertices.device)
-    rotate_z_to_x[0, 0] = 0
-    rotate_z_to_x[0, 2] = 1
-    rotate_z_to_x[2, 0] = -1
-    rotate_z_to_x[2, 2] = 0
-    vertices = apply_T_on_points(vertices, rotate_z_to_x)
-    joints = apply_T_on_points(joints, rotate_z_to_x)
+    if facing_direction == "+X":
+        rotate_z_to_x = torch.eye(4, dtype=vertices.dtype, device=vertices.device)
+        rotate_z_to_x[0, 0] = 0
+        rotate_z_to_x[0, 2] = 1
+        rotate_z_to_x[2, 0] = -1
+        rotate_z_to_x[2, 2] = 0
+        vertices = apply_T_on_points(vertices, rotate_z_to_x)
+        joints = apply_T_on_points(joints, rotate_z_to_x)
     return vertices, joints, ground_y
 
 
@@ -128,20 +129,21 @@ def get_params(input_path, device):
 
 
 @torch.inference_mode()
-def visualize(smplx_params, output_path, width, height, fps, device, camera_beta, axis_length):
+def visualize(smplx_params, output_path, width, height, fps, device, camera_beta, axis_length, facing_direction):
     # 由参数生成人体网格和关节
     smplx = make_smplx("supermotion").eval().to(device)
     smplx_output = smplx(**smplx_params)
     vertices = smplx_output.vertices
     joints = smplx_output.joints[:, :22]
 
-    # 使用整段动作估计地面并面朝 +X，后续所有帧使用同一个变换
-    vertices, joints, ground_y = standardize_motion(vertices, joints)
+    # 使用整段动作估计地面，并按参数统一整段动作的朝向
+    vertices, joints, ground_y = standardize_motion(vertices, joints, facing_direction)
     vertices_cpu = vertices.cpu()
     joints_cpu = joints.cpu()
 
     frame_min_y = vertices_cpu[..., 1].amin(dim=1)
     print(f"估计地面高度：{ground_y:.4f} m")
+    print(f"第一帧朝向：{facing_direction}")
     print(f"所有帧最低点范围：[{frame_min_y.min():.4f}, {frame_min_y.max():.4f}] m")
     print(f"穿地帧数：{int((frame_min_y < -1e-4).sum())}/{len(frame_min_y)}")
 
@@ -181,6 +183,7 @@ if __name__ == "__main__":
     input_path = Path("gvhmr_out/xk/xk.pt")
     output_path = input_path.with_suffix(".mp4")
     device = "cuda"  # 没有显卡时改成 "cpu"
+    facing_direction = "+Z"  # 可选："+X"或"+Z"
 
     width = 720
     height = 1280
@@ -189,4 +192,4 @@ if __name__ == "__main__":
     axis_length = 0.5  # 坐标轴长度，单位为米
 
     smplx_params = get_params(input_path, device)
-    visualize(smplx_params, output_path, width, height, fps, device, camera_beta, axis_length)
+    visualize(smplx_params, output_path, width, height, fps, device, camera_beta, axis_length, facing_direction)

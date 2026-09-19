@@ -1,5 +1,5 @@
 '''
-用VolumetricSMPL检测并修复是否穿模
+用VolumetricSMPL检测并修复是否穿模【注意需要先安装对应的包】
 
 args:
 - smpl_file，例如a/b/c.pt
