@@ -350,7 +350,7 @@ def fix_smooth(original_file, fixed_file, inpenet_frames):
 if __name__ == "__main__":
     start_time = time.perf_counter()
 
-    smpl_file = Path("gvhmr_out/inpenet/inpenet.pt")
+    smpl_file = Path("gvhmr_out/xk/xk.pt")
     device = "cuda:0"
 
     # 损失权重

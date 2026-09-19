@@ -174,7 +174,7 @@ def fix_leg(smpl_file, fix_frames):
 
 
 if __name__ == "__main__":
-    smpl_file = Path("gvhmr_out/leg/leg.pt")
+    smpl_file = Path("gvhmr_out/xk/xk.pt")
     max_fix_frames = 10
     device = "cuda"
 
