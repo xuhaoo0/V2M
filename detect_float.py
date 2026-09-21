@@ -9,6 +9,7 @@
 
 args:
 - smpl_file，例如a/b/c.pt
+- device, 例如0
 
 输出：a/b/c.json
 
@@ -21,11 +22,12 @@ args:
 
 字段"float_info"
 - "N"，表示判定从第N帧开始浮空
-字段"penetration_info"
+字段"groundpnt_info"
 - "3, 4, 9"，表示第3,4,9帧存在穿地
 注意：如果json存在就不要新建了、字段存在就覆盖写
 '''
 
+import argparse
 import json
 from pathlib import Path
 
@@ -63,7 +65,8 @@ def detect_groundpnt(frame_min_y, json_file, penetration_threshold):
     penetration_frames = torch.where(frame_min_y < penetration_threshold)[0].tolist()
     result = json.loads(json_file.read_text(encoding="utf-8")) if json_file.exists() else {}
     result["groundpnt"] = "exist" if penetration_frames else "nonexist"
-    result["penetration_info"] = ", ".join(map(str, penetration_frames))
+    result["groundpnt_info"] = ", ".join(map(str, penetration_frames))
+    result.pop("penetration_info", None)
     json_file.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     print(f"穿地检测：{result['groundpnt']}，共{len(penetration_frames)}帧")
@@ -88,12 +91,36 @@ def detect_float(frame_min_y, json_file, float_threshold):
     return float_start
 
 
-if __name__ == "__main__":
-    # 输入输出路径
-    smpl_file = Path("gvhmr_out/xk/xk.pt")
-    json_file = smpl_file.with_suffix(".json")
+def parse_cli_args(smpl_file: Path, device: int) -> tuple[Path, str]:
+    """从命令行读取参数，未传入的参数沿用测试值。"""
+    parser = argparse.ArgumentParser(description="检测人体悬空和穿地")
+    parser.add_argument(
+        "--smpl_file",
+        "--smpl-file",
+        dest="smpl_file",
+        type=Path,
+        default=smpl_file,
+        help="待检测的 SMPL 参数文件",
+    )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=device,
+        help="GPU 编号，例如 0 或 1",
+    )
+    args = parser.parse_args()
+    return args.smpl_file, f"cuda:{args.device}"
 
-    device = "cuda:0"
+
+if __name__ == "__main__":
+    # 【用于测试】
+    smpl_file = Path("gvhmr_out/xk/xk.pt")
+    device = 0
+
+    # 从外部获取参数
+    smpl_file, device = parse_cli_args(smpl_file, device)
+
+    json_file = smpl_file.with_suffix(".json")
     batch_size = 64
     penetration_threshold = -0.2  # 这两个阈值有待修改
     float_threshold = 0.2

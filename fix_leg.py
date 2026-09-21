@@ -3,6 +3,8 @@
 
 args:
 - smpl_file，例如a/b/c.pt
+- fix，例如False
+- device，例如0
 
 detect_leg函数：
 输出：a/b/c.json
@@ -17,7 +19,9 @@ fix_leg函数：
 输出：a/b/c_fix_leg.pt，即修复之后，交换左右hip、knee、ankle、foot旋转参数的结果。
 '''
 
+import argparse
 import json
+import shutil
 from pathlib import Path
 
 import torch
@@ -162,21 +166,74 @@ def detect_leg(smpl_file, max_fix_frames, device):
 
 def fix_leg(smpl_file, fix_frames):
     """交换指定帧的左右腿旋转参数，并保存修复结果。"""
-    result = torch.load(smpl_file, map_location="cpu", weights_only=True)
+    backup_file = smpl_file.with_name(f"{smpl_file.stem}_before_fix_leg.pt")
+    shutil.copy2(smpl_file, backup_file)
+    result = torch.load(backup_file, map_location="cpu", weights_only=True)
 
     # global和incam的body_pose相同，但文件中保存了两份，都需要修改
     for name in ("smpl_params_global", "smpl_params_incam"):
         result[name]["body_pose"] = apply_fix(result[name]["body_pose"], fix_frames)
 
-    output_file = smpl_file.with_name(f"{smpl_file.stem}_fix_leg.pt")
-    torch.save(result, output_file)
-    print(f"修复结果：{output_file}")
+    torch.save(result, smpl_file)
+    print(f"修复前备份：{backup_file}")
+    print(f"修复结果：{smpl_file}")
+    return smpl_file
+
+
+def parse_cli_args(
+    smpl_file: Path,
+    fix: bool,
+    device: int,
+) -> tuple[Path, bool, str]:
+    """从命令行读取参数，未传入的参数沿用测试值。"""
+
+    def parse_bool(value: str) -> bool:
+        normalized = value.lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+        raise argparse.ArgumentTypeError(f"无法解析布尔值：{value}")
+
+    parser = argparse.ArgumentParser(description="检测并修复左右腿互换")
+    parser.add_argument(
+        "--smpl_file",
+        "--smpl-file",
+        dest="smpl_file",
+        type=Path,
+        default=smpl_file,
+        help="待检测的 SMPL 参数文件",
+    )
+    parser.add_argument(
+        "--fix_leg",
+        "--fix-leg",
+        dest="fix",
+        type=parse_bool,
+        nargs="?",
+        const=True,
+        default=fix,
+        help="是否修复左右腿互换；可省略值，或传入 true/false",
+    )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=device,
+        help="GPU 编号，例如 0 或 1",
+    )
+    args = parser.parse_args()
+    return args.smpl_file, args.fix, f"cuda:{args.device}"
 
 
 if __name__ == "__main__":
+    # 【用于测试】
     smpl_file = Path("gvhmr_out/xk/xk.pt")
-    max_fix_frames = 10
-    device = "cuda"
+    fix = False  # 命令行叫fix_leg
+    device = 0
 
+    # 从外部获取参数
+    smpl_file, fix, device = parse_cli_args(smpl_file, fix, device)
+
+    max_fix_frames = 10
     fix_frames = detect_leg(smpl_file, max_fix_frames, device)  # 检测功能
-    fix_leg(smpl_file, fix_frames)  # 修复功能，可以选择注释掉不用
+    if fix:
+        fix_leg(smpl_file, fix_frames)  # 修复功能

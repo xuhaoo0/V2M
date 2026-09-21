@@ -10,6 +10,7 @@ a/b/c/c-001/c-001文件夹
 最后把上面的文件夹里面的pt复制一份，存为a/b/c/c-001/c-001.pt
 '''
 
+import argparse
 import os
 import shutil
 import subprocess
@@ -26,11 +27,11 @@ def get_output_paths(input_video: Path) -> tuple[Path, Path, Path]:
 
 
 def run_gvhmr(
-    input_video: Path, output_root: Path, gvhmr_root: Path, gpu: int
+    input_video: Path, output_root: Path, gvhmr_root: Path, device: int
 ) -> None:
     """调用 GVHMR 重建视频。"""
     env = os.environ.copy()
-    env["CUDA_VISIBLE_DEVICES"] = str(gpu)
+    env["CUDA_VISIBLE_DEVICES"] = str(device)
 
     command = [
         sys.executable,
@@ -48,19 +49,42 @@ def copy_result(output_dir: Path, output_pt: Path) -> None:
     shutil.copy2(output_dir / "hmr4d_results.pt", output_pt)
 
 
-if __name__ == "__main__":
-    # 路径参数
-    gvhmr_root = Path(__file__).resolve().parent / "GVHMR"
-    input_video = Path("martial_data/武当陈师睿/2025-08-03-7534355708314733866/武当陈师睿-2025-08-03-7534355708314733866/武当陈师睿-2025-08-03-7534355708314733866-001/武当陈师睿-2025-08-03-7534355708314733866-001.mp4")
+def parse_cli_args(input_video: Path, device: int) -> tuple[Path, int]:
+    """从命令行读取参数，未传入的参数沿用测试值。"""
+    parser = argparse.ArgumentParser(description="使用 GVHMR 重建视频")
+    parser.add_argument(
+        "--input_video",
+        "--input-video",
+        dest="input_video",
+        type=Path,
+        default=input_video,
+        help="需要重建的视频路径",
+    )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=device,
+        help="GPU 编号，例如 0 或 1",
+    )
+    args = parser.parse_args()
+    return args.input_video, args.device
 
-    # GPU 参数
-    gpu = 1
+
+if __name__ == "__main__":
+    gvhmr_root = Path(__file__).resolve().parent / "GVHMR"
+
+    # 【用于测试】
+    input_video = Path("origin_data/batch1/武当陈师睿/2025-08-03-7534355708314733866/武当陈师睿-2025-08-03-7534355708314733866.mp4")
+    device = 0
+
+    # 从外部获取参数
+    input_video, device = parse_cli_args(input_video, device)
 
     output_root, output_dir, output_pt = get_output_paths(input_video)
     print(f"开始重建：{input_video}")
     print(f"输出目录：{output_dir}")
 
-    run_gvhmr(input_video, output_root, gvhmr_root, gpu)
+    run_gvhmr(input_video, output_root, gvhmr_root, device)
     copy_result(output_dir, output_pt)
 
     print(f"重建完成：{output_pt}")

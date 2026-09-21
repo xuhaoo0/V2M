@@ -3,6 +3,8 @@
 
 args:
 - smpl_file，例如a/b/c.pt
+- fix，例如False
+- device，例如0
 
 detect_inpenet函数：
 输出：a/b/c.json
@@ -15,13 +17,15 @@ detect_inpenet函数：
 注意：如果json存在就不要新建了、字段存在就覆盖写
 
 fix_inpenet函数：
-第一阶段逐帧修复，输出：a/b/c_fix_inpenet.pt
+第一阶段逐帧修复，输出：a/b/c.pt
 
 fix_smooth函数：
-第二阶段联合平滑连续帧，并覆盖a/b/c_fix_inpenet.pt【暂时先这样】
+第二阶段联合平滑连续帧，并覆盖a/b/c.pt
 '''
 
+import argparse
 import json
+import shutil
 import time
 from contextlib import redirect_stdout
 from io import StringIO
@@ -282,7 +286,9 @@ def get_consecutive_ranges(frames):
 
 def fix_inpenet(smpl_file, inpenet_frames):
     """第一阶段：逐帧修复穿模并保存结果。"""
-    result = torch.load(smpl_file, map_location="cpu", weights_only=True)
+    backup_file = smpl_file.with_name(f"{smpl_file.stem}_before_fix_inpenet.pt")
+    shutil.copy2(smpl_file, backup_file)
+    result = torch.load(backup_file, map_location="cpu", weights_only=True)
     params = result["smpl_params_global"]
     fixed_pose = params["body_pose"].clone()
 
@@ -307,10 +313,10 @@ def fix_inpenet(smpl_file, inpenet_frames):
     for name in ("smpl_params_global", "smpl_params_incam"):
         result[name]["body_pose"] = fixed_pose.clone()
 
-    output_file = smpl_file.with_name(f"{smpl_file.stem}_fix_inpenet.pt")
-    torch.save(result, output_file)
-    print(f"第一阶段修复结果：{output_file}")
-    return output_file
+    torch.save(result, smpl_file)
+    print(f"修复前备份：{backup_file}")
+    print(f"第一阶段修复结果：{smpl_file}")
+    return smpl_file
 
 
 def fix_smooth(original_file, fixed_file, inpenet_frames):
@@ -347,11 +353,58 @@ def fix_smooth(original_file, fixed_file, inpenet_frames):
     return fixed_file
 
 
-if __name__ == "__main__":
-    start_time = time.perf_counter()
+def parse_cli_args(
+    smpl_file: Path,
+    fix: bool,
+    device: int,
+) -> tuple[Path, bool, str]:
+    """从命令行读取参数，未传入的参数沿用测试值。"""
 
+    def parse_bool(value: str) -> bool:
+        normalized = value.lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+        raise argparse.ArgumentTypeError(f"无法解析布尔值：{value}")
+
+    parser = argparse.ArgumentParser(description="检测并修复人体穿模")
+    parser.add_argument(
+        "--smpl_file",
+        "--smpl-file",
+        dest="smpl_file",
+        type=Path,
+        default=smpl_file,
+        help="待检测的 SMPL 参数文件",
+    )
+    parser.add_argument(
+        "--fix_inpenet",
+        "--fix-inpenet",
+        dest="fix",
+        type=parse_bool,
+        nargs="?",
+        const=True,
+        default=fix,
+        help="是否修复人体穿模；可省略值，或传入 true/false",
+    )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=device,
+        help="GPU 编号，例如 0 或 1",
+    )
+    args = parser.parse_args()
+    return args.smpl_file, args.fix, f"cuda:{args.device}"
+
+
+if __name__ == "__main__":
+    # 【用于测试】
     smpl_file = Path("gvhmr_out/xk/xk.pt")
-    device = "cuda:0"
+    fix = False  # 命令行叫fix_inpenet
+    device = 0
+
+    # 从外部获取参数
+    smpl_file, fix, device = parse_cli_args(smpl_file, fix, device)
 
     # 损失权重
     selfpen_weight = 1.0
@@ -369,15 +422,18 @@ if __name__ == "__main__":
     smooth_iters = 20  # 第二阶段的迭代次数
     lr = 1e-5
 
+    start_time = time.perf_counter()
     model = make_model()
     inpenet_frames = detect_inpenet(smpl_file)  # 检测，几乎不耗时间
-    fixed_file = fix_inpenet(smpl_file, inpenet_frames)  # 第一阶段，解决穿模
-    detect_inpenet(fixed_file)  # 检测第一阶段的结果
-    fix_smooth(smpl_file, fixed_file, inpenet_frames)  # 第二阶段，加入平滑
-    detect_inpenet(fixed_file)  # 检测第二阶段的结果
+    if fix:
+        backup_file = smpl_file.with_name(f"{smpl_file.stem}_before_fix_inpenet.pt")
+        fixed_file = fix_inpenet(smpl_file, inpenet_frames)  # 第一阶段，解决穿模
+        detect_inpenet(fixed_file)  # 检测第一阶段的结果
+        fix_smooth(backup_file, fixed_file, inpenet_frames)  # 第二阶段，加入平滑
+        detect_inpenet(fixed_file)  # 检测第二阶段的结果
 
     # 输出时间
-    elapsed_seconds = round(time.perf_counter() - start_time)
-    hours, remainder = divmod(elapsed_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    print(f"总运行时间：{hours}时{minutes}分{seconds}秒")
+    # elapsed_seconds = round(time.perf_counter() - start_time)
+    # hours, remainder = divmod(elapsed_seconds, 3600)
+    # minutes, seconds = divmod(remainder, 60)
+    # print(f"总运行时间：{hours}时{minutes}分{seconds}秒")
