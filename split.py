@@ -1,5 +1,5 @@
 '''
-切分一条视频
+切分一条视频【需要安装pyscenedetect对应的包】
 
 args:
 - input_video，例如{input_dir}/a/b/c.mp4
