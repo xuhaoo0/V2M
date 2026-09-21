@@ -192,3 +192,6 @@ cython_debug/
 torchsparse
 tensorboard
 glove
+
+origin_data
+martial_data

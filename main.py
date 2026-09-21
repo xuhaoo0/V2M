@@ -9,16 +9,17 @@ args:
 - gpu，例如0，使用哪块显卡
 
 输出示例：
-out
+假设处理的视频是{input_dir}/a/b/c.mp4
+{output_dir}
 - a/b/c
-  - c_001
-    - c_001.mp4  # from split
-    - c_001  # from gvhmr
+  - c-001
+    - c-001.mp4  # from split
+    - c-001  # from gvhmr
       - xxx.pt
       - xxx.mp4
-    - c_001.json  # from detect_xxx
-    - c_001.pt  # from fix
-  - c_002
+    - c-001.json  # from detect_xxx
+    - c-001.pt  # from fix
+  - c-002
     ...
 
 '''
