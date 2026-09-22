@@ -74,7 +74,7 @@ if __name__ == "__main__":
     gvhmr_root = Path(__file__).resolve().parent / "GVHMR"
 
     # 【用于测试】
-    input_video = Path("origin_data/batch1/武当陈师睿/2025-08-03-7534355708314733866/武当陈师睿-2025-08-03-7534355708314733866.mp4")
+    input_video = Path("gvhmr_out/short/short.mp4")
     device = 0
 
     # 从外部获取参数
