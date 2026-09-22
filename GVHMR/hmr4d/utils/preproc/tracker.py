@@ -2,9 +2,7 @@ from ultralytics import YOLO
 from hmr4d import PROJ_ROOT
 
 import torch
-import numpy as np
 from tqdm import tqdm
-from collections import defaultdict
 
 from hmr4d.utils.seq_utils import (
     get_frame_id_list_from_mask,
@@ -21,8 +19,7 @@ class Tracker:
         # https://docs.ultralytics.com/modes/predict/
         self.yolo = YOLO(PROJ_ROOT / "inputs/checkpoints/yolo/yolov8x.pt")
 
-    def track(self, video_path):
-        track_history = []
+    def detect(self, video_path):
         cfg = {
             "device": "cuda",
             "conf": 0.5,  # default 0.25, wham 0.5
@@ -30,69 +27,30 @@ class Tracker:
             "verbose": False,
             "stream": True,
         }
-        results = self.yolo.track(video_path, **cfg)
-        # frame-by-frame tracking
-        track_history = []
-        for result in tqdm(results, total=get_video_lwh(video_path)[0], desc="YoloV8 Tracking"):
-            if result.boxes.id is not None:
-                track_ids = result.boxes.id.int().cpu().tolist()  # (N)
-                bbx_xyxy = result.boxes.xyxy.cpu().numpy()  # (N, 4)
-                result_frame = [{"id": track_ids[i], "bbx_xyxy": bbx_xyxy[i]} for i in range(len(track_ids))]
-            else:
-                result_frame = []
-            track_history.append(result_frame)
+        results = self.yolo.predict(video_path, **cfg)
+        detections = []
+        for result in tqdm(results, total=get_video_lwh(video_path)[0], desc="YoloV8 Detection"):
+            if result.boxes is None or len(result.boxes) == 0:
+                detections.append(None)
+                continue
 
-        return track_history
+            bbx_xyxy = result.boxes.xyxy.cpu()  # (N, 4)
+            bbx_wh = bbx_xyxy[:, 2:] - bbx_xyxy[:, :2]
+            largest_idx = (bbx_wh[:, 0] * bbx_wh[:, 1]).argmax()
+            detections.append(bbx_xyxy[largest_idx])
 
-    @staticmethod
-    def sort_track_length(track_history, video_path):
-        """This handles the track history from YOLO tracker."""
-        id_to_frame_ids = defaultdict(list)
-        id_to_bbx_xyxys = defaultdict(list)
-        # parse to {det_id : [frame_id]}
-        for frame_id, frame in enumerate(track_history):
-            for det in frame:
-                id_to_frame_ids[det["id"]].append(frame_id)
-                id_to_bbx_xyxys[det["id"]].append(det["bbx_xyxy"])
-        for k, v in id_to_bbx_xyxys.items():
-            id_to_bbx_xyxys[k] = np.array(v)
-
-        # Sort by length of each track (max to min)
-        id_length = {k: len(v) for k, v in id_to_frame_ids.items()}
-        id2length = dict(sorted(id_length.items(), key=lambda item: item[1], reverse=True))
-
-        # Sort by area sum (max to min)
-        id_area_sum = {}
-        l, w, h = get_video_lwh(video_path)
-        for k, v in id_to_bbx_xyxys.items():
-            bbx_wh = v[:, 2:] - v[:, :2]
-            id_area_sum[k] = (bbx_wh[:, 0] * bbx_wh[:, 1] / w / h).sum()
-        id2area_sum = dict(sorted(id_area_sum.items(), key=lambda item: item[1], reverse=True))
-        id_sorted = list(id2area_sum.keys())
-
-        return id_to_frame_ids, id_to_bbx_xyxys, id_sorted
+        return detections
 
     def get_one_track(self, video_path, track_id=0):
-        # track
-        track_history = self.track(video_path)
-        if not any(track_history):
-            print("[Tracker] No person detected; skipping video")
-            return None
+        if track_id != 0:
+            raise ValueError("Per-frame main-person detection only supports track_id=0")
 
-        # Parse track history and select by cumulative-area rank.
-        id_to_frame_ids, id_to_bbx_xyxys, id_sorted = self.sort_track_length(track_history, video_path)
-        if not id_sorted:
+        detections = self.detect(video_path)
+        frame_ids = torch.tensor([i for i, bbx in enumerate(detections) if bbx is not None])
+        if len(frame_ids) == 0:
             print("[Tracker] No person detected; skipping video")
             return None
-        if not 0 <= track_id < len(id_sorted):
-            raise ValueError(
-                f"track_id={track_id} is unavailable: detected {len(id_sorted)} track(s); "
-                f"valid values are 0 to {len(id_sorted) - 1}"
-            )
-        yolo_track_id = id_sorted[track_id]
-        print(f"[Tracker] Selected track_id={track_id} (YOLO track ID: {yolo_track_id})")
-        frame_ids = torch.tensor(id_to_frame_ids[yolo_track_id])  # (N,)
-        bbx_xyxys = torch.tensor(id_to_bbx_xyxys[yolo_track_id])  # (N, 4)
+        bbx_xyxys = torch.stack([bbx for bbx in detections if bbx is not None])
 
         # interpolate missing frames
         mask = frame_id_to_mask(frame_ids, get_video_lwh(video_path)[0])

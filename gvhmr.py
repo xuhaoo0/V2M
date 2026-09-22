@@ -1,5 +1,5 @@
 '''
-重建一条数据
+重建一条数据（要求视频里面尽量只有一个人，或者每一帧都能保证重建的人物面积最大）
 
 args:
 - input_video，例如a/b/c/c-001/c-001.mp4
@@ -74,7 +74,7 @@ if __name__ == "__main__":
     gvhmr_root = Path(__file__).resolve().parent / "GVHMR"
 
     # 【用于测试】
-    input_video = Path("gvhmr_out/short/short.mp4")
+    input_video = Path("gvhmr_out/long/long.mp4")
     device = 0
 
     # 从外部获取参数
