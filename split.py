@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # 从外部读取
     input_dir, output_dir, input_video = parse_cli_paths(input_dir, output_dir, input_video)
 
-    # 切分参数，数值越小越敏感【需要调整】
+    # 切分参数，数值越小越敏感【很难调整】
     adaptive_threshold = 2.0  # 当前画面变化相对于前后帧平均变化的突兀程度
     min_content_val = 8.0  # 画面变化量
     min_scene_len = "2s"  # 最短镜头时长
