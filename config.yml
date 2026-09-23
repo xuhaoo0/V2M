@@ -4,10 +4,10 @@ device: [0, 2]  # 可用的gpu
 process_num: 3  # 每张gpu固定启动的进程数
 
 # 是否使用该功能
-split: true
-gvhmr: false
-detect_float: false
-detect_leg: false
+split: true  # 建议使用
+gvhmr: true
+detect_float: true
+detect_leg: true
 fix_leg: false
-detect_inpenet: false
+detect_inpenet: true
 fix_inpenet: false

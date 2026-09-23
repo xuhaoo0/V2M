@@ -26,7 +26,7 @@ detect_float：判断是否存在悬空或穿地
 '''
 
 '''
-流程：
+流程：【大量占cpu的操作，都拿出来加锁，保证同一时间只有一个进程能用】
 从config.yml读取所有参数
 遍历input_dir下面的所有mp4
 如果split：
@@ -84,18 +84,32 @@ def run_script(script, *args, log_file=None):
     )
 
 
-def get_clip_videos(input_video, input_dir, output_dir, split, log_file=None):
+def get_clip_videos(
+    input_video,
+    input_dir,
+    output_dir,
+    split,
+    device,
+    split_lock,
+    log_file=None,
+):
     relative_path = input_video.relative_to(input_dir)
     video_output_dir = output_dir / relative_path.parent / input_video.stem
     # 切视频
     if split:
-        run_script(
-            "split.py",
-            "--input_dir", input_dir,
-            "--output_dir", output_dir,
-            "--input_video", input_video,
-            log_file=log_file,
-        )
+        print(f"等待 split：{input_video}", flush=True)
+        # 所有 worker 共用这一把锁，同一时间只运行一个 split.py。
+        with split_lock:
+            print(f"开始 split：{input_video}", flush=True)
+            run_script(
+                "split.py",
+                "--input_dir", input_dir,
+                "--output_dir", output_dir,
+                "--input_video", input_video,
+                "--device", device,
+                log_file=log_file,
+            )
+        print(f"结束 split：{input_video}", flush=True)
         return sorted(video_output_dir.glob("*/*.mp4"))
     # 如果不切视频，还是用原视频构造一个001切片，方便后续处理
     source_json = find_source_json(input_video)
@@ -111,7 +125,15 @@ def get_clip_videos(input_video, input_dir, output_dir, split, log_file=None):
     return [clip_video]
 
 
-def process_video(input_video, input_dir, output_dir, config, device, log_file):
+def process_video(
+    input_video,
+    input_dir,
+    output_dir,
+    config,
+    device,
+    split_lock,
+    log_file,
+):
     """在固定GPU上处理一条原始视频及其所有切片。"""
     start_time = time.perf_counter()
     clip_videos = get_clip_videos(
@@ -119,6 +141,8 @@ def process_video(input_video, input_dir, output_dir, config, device, log_file):
         input_dir,
         output_dir,
         config["split"],
+        device,
+        split_lock,
         log_file,
     )
 
@@ -179,6 +203,7 @@ def worker(
     input_dir,
     output_dir,
     config,
+    split_lock,
     log_dir,
     completed_count,
     total_tasks,
@@ -214,6 +239,7 @@ def worker(
                         output_dir,
                         config,
                         gpu_id,
+                        split_lock,
                         log_file,
                     )
                     print(
@@ -251,6 +277,7 @@ def launch_processes(
     input_dir,
     output_dir,
     config,
+    split_lock,
     log_dir,
     completed_count,
     total_tasks,
@@ -267,6 +294,7 @@ def launch_processes(
                     input_dir,
                     output_dir,
                     config,
+                    split_lock,
                     log_dir,
                     completed_count,
                     total_tasks,
@@ -297,6 +325,8 @@ def run_on_multigpu(input_videos, input_dir, output_dir, config):
 
     task_queue = collect_tasks(input_videos)
     completed_count = mp.Value("i", 0)
+    # 只限制 split 阶段，后续重建和检测仍可由多个 worker 并行执行。
+    split_lock = mp.Lock()
     total_tasks = len(input_videos)
     print(
         f"***** total {total_tasks} videos, GPUs: {gpu_list}, "
@@ -309,6 +339,7 @@ def run_on_multigpu(input_videos, input_dir, output_dir, config):
         input_dir,
         output_dir,
         config,
+        split_lock,
         log_dir,
         completed_count,
         total_tasks,

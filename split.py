@@ -2,21 +2,28 @@
 按画面突变切分一条视频
 【需要安装包：pip install git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut.git】
 
+方法：
+原视频、OmniShotCut检测得到切片的帧号，例如：[[0, 301], [301, 361], ..., [1273, 1404]]
+对原视频编解码得到各个切片视频（这一步要求尽量使用gpu、速度要快）、过滤短切片
+
 args:
 - input_video，例如{input_dir}/a/b/c.mp4
 - input_dir，用于替换路径
 - output_dir，把所有输出放在这下面，例如{output_dir}/a/b/c/c-001/c-001.mp4
+- device，例如0
 '''
 
 import argparse
 import json
 import shutil
 import subprocess
+import tempfile
 import time
 from fractions import Fraction
 from pathlib import Path
 
 import omnishotcut
+import torch
 
 
 MODEL_PATH = Path("checkpoints/omnishotcut/OmniShotCut_ckpt.pth")
@@ -61,6 +68,23 @@ def get_video_fps(input_video: Path) -> float:
     return fps
 
 
+def get_video_frame_count(input_video: Path) -> int:
+    """读取视频帧数。"""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=nb_frames",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(input_video),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return int(result.stdout.strip())
+
+
 def copy_source_json(
     input_video: Path,
     video_output_dir: Path,
@@ -91,18 +115,16 @@ def normalize_ranges(ranges) -> list[tuple[int, int]]:
     OmniShotCut 输出例如：
     [[0, 301], [301, 361], ..., [1273, 1404]]
 
-    其中前面的右端点是下一段的起点，最后一段的右端点
-    是最后一帧的编号。
+    所有区间统一按左闭右开处理，包括最后一个区间。
     """
     raw_ranges = [tuple(map(int, frame_range)) for frame_range in ranges]
     normalized_ranges = []
 
-    for index, frame_range in enumerate(raw_ranges):
+    for frame_range in raw_ranges:
         if len(frame_range) != 2:
             raise ValueError(f"无效的切片区间：{frame_range}")
 
-        start_frame, raw_end_frame = frame_range
-        end_frame = raw_end_frame + (index == len(raw_ranges) - 1)
+        start_frame, end_frame = frame_range
 
         if start_frame < 0 or end_frame <= start_frame:
             raise ValueError(f"无效的切片区间：{frame_range}")
@@ -114,10 +136,13 @@ def normalize_ranges(ranges) -> list[tuple[int, int]]:
 
 def detect_ranges(
     input_video: Path,
+    device: int,
 ) -> tuple[list[tuple[int, int]], float, int]:
     """使用 OmniShotCut 检测原视频切片。"""
     fps = get_video_fps(input_video)
+    frame_count = get_video_frame_count(input_video)
 
+    torch.cuda.set_device(device)
     model = omnishotcut.load(str(MODEL_PATH))
     ranges = model.inference(
         str(input_video),
@@ -129,7 +154,6 @@ def detect_ranges(
     if not normalized_ranges:
         raise RuntimeError("OmniShotCut 未返回任何切片区间")
 
-    frame_count = normalized_ranges[-1][1]
     return normalized_ranges, fps, frame_count
 
 
@@ -138,113 +162,78 @@ def split_video(
     video_output_dir: Path,
     ranges: list[tuple[int, int]],
     min_clip_frames: int,
+    device: int,
 ) -> list[Path]:
-    """
-    根据 OmniShotCut 返回的区间切分视频。
-
-    使用一次 FFmpeg 解码生成所有保留的切片。
-    少于 min_clip_frames 帧的切片直接丢弃。
-    """
+    """使用 NVDEC + NVENC 按帧范围切分视频。"""
     video_output_dir.mkdir(parents=True, exist_ok=True)
 
-    clips = []
-    output_index = 1
-
-    for start_frame, end_frame in ranges:
-        clip_frames = end_frame - start_frame
-
-        # 少于指定帧数的切片直接丢弃
-        if clip_frames < min_clip_frames:
-            print(
-                f"跳过短片段：frame {start_frame} ~ {end_frame - 1}，"
-                f"共 {clip_frames} 帧"
-            )
-            continue
-
-        clip_name = f"{input_video.stem}-{output_index:03d}"
-
-        clip_dir = video_output_dir / clip_name
-        clip_dir.mkdir(parents=True, exist_ok=True)
-
-        output_path = clip_dir / f"{clip_name}.mp4"
-        output_json = clip_dir / f"{clip_name}.json"
-
-        clips.append(
-            (start_frame, end_frame, output_path, output_json)
-        )
-        output_index += 1
-
-    if not clips:
+    if not ranges:
         return []
 
-    filter_parts = []
+    if ranges[0][0] != 0 or any(ranges[i][0] != ranges[i - 1][1] for i in range(1, len(ranges))):
+        raise ValueError("当前切分方法要求 ranges 从第 0 帧开始，并且各区间连续")
 
-    if len(clips) == 1:
-        trim_inputs = ["[0:v]"]
-    else:
-        split_outputs = "".join(
-            f"[split{index}]" for index in range(len(clips))
-        )
-        filter_parts.append(
-            f"[0:v]split={len(clips)}{split_outputs}"
-        )
-        trim_inputs = [
-            f"[split{index}]" for index in range(len(clips))
+    segment_boundaries = [start_frame for start_frame, _ in ranges[1:]]
+    segment_boundaries.append(ranges[-1][1])
+    force_keyframes = "+".join(f"eq(n,{frame})" for frame in segment_boundaries)
+
+    with tempfile.TemporaryDirectory(prefix=".split_segments_", dir=video_output_dir) as temp_dir:
+        temp_dir = Path(temp_dir)
+        temp_output_pattern = temp_dir / "segment-%03d.mp4"
+        command = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-hwaccel", "cuda", "-hwaccel_device", str(device), "-hwaccel_output_format", "cuda",
+            "-i", str(input_video), "-map", "0:v:0", "-an", "-vsync", "0",
+            "-c:v", "h264_nvenc", "-gpu", str(device), "-preset", "p1",
+            "-rc", "vbr", "-cq", "23", "-b:v", "0", "-forced-idr", "1",
+            "-force_key_frames", f"expr:{force_keyframes}",
+            "-f", "segment", "-segment_format", "mp4",
+            "-segment_frames", ",".join(map(str, segment_boundaries)),
+            "-reset_timestamps", "1", str(temp_output_pattern),
         ]
 
-    for index, (start_frame, end_frame, _, _) in enumerate(clips):
-        filter_parts.append(
-            f"{trim_inputs[index]}"
-            f"trim=start_frame={start_frame}:end_frame={end_frame},"
-            f"setpts=PTS-STARTPTS[clip{index}]"
-        )
+        try:
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(f"FFmpeg 切分视频失败：\n{error.stderr.strip()}") from error
 
-    command = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        str(input_video),
-        "-filter_complex",
-        ";".join(filter_parts),
-    ]
+        temp_outputs = sorted(temp_dir.glob("segment-*.mp4"))
+        output_paths = []
+        output_index = 1
+        start_frame = 0
 
-    for index, (_, _, output_path, _) in enumerate(clips):
-        command.extend(
-            [
-                "-map",
-                f"[clip{index}]",
-                "-an",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                str(output_path),
-            ]
-        )
+        for temp_output in temp_outputs:
+            clip_frames = get_video_frame_count(temp_output)
+            end_frame = start_frame + clip_frames
 
-    subprocess.run(
-        command,
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+            if clip_frames < min_clip_frames:
+                print(f"丢弃短片段：frame {start_frame} ~ {end_frame - 1}，共 {clip_frames} 帧")
+                start_frame = end_frame
+                continue
 
-    for start_frame, end_frame, _, output_json in clips:
-        split_info = {
-            "split_info": f"[{start_frame}, {end_frame - 1}]"
-        }
-        with output_json.open("w", encoding="utf-8") as json_file:
-            json.dump(split_info, json_file, ensure_ascii=False, indent=4)
-            json_file.write("\n")
+            clip_name = f"{input_video.stem}-{output_index:03d}"
+            clip_dir = video_output_dir / clip_name
+            clip_dir.mkdir(parents=True, exist_ok=True)
+            output_path = clip_dir / f"{clip_name}.mp4"
+            output_json = clip_dir / f"{clip_name}.json"
+            shutil.move(str(temp_output), str(output_path))
 
-    return [output_path for _, _, output_path, _ in clips]
+            with output_json.open("w", encoding="utf-8") as json_file:
+                json.dump({"split_info": f"[{start_frame}, {end_frame - 1}]"}, json_file, ensure_ascii=False, indent=4)
+                json_file.write("\n")
 
+            output_paths.append(output_path)
+            output_index += 1
+            start_frame = end_frame
+
+    return output_paths
 
 def parse_cli_paths(
     input_dir: Path,
     output_dir: Path,
     input_video: Path,
-) -> tuple[Path, Path, Path]:
+    device: int,
+) -> tuple[Path, Path, Path, int]:
     """从命令行读取路径，未传入的参数沿用测试值。"""
     parser = argparse.ArgumentParser(description="使用 OmniShotCut 切分视频")
 
@@ -275,9 +264,16 @@ def parse_cli_paths(
         help="需要切分的视频路径",
     )
 
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=device,
+        help="GPU 编号，例如 0 或 1",
+    )
+
     args = parser.parse_args()
 
-    return args.input_dir, args.output_dir, args.input_video
+    return args.input_dir, args.output_dir, args.input_video, args.device
 
 
 if __name__ == "__main__":
@@ -287,12 +283,14 @@ if __name__ == "__main__":
     input_dir = Path("origin_data/batch1")  # 必须是input_video的前缀
     output_dir = Path("origin_data/test_out")
     input_video = Path("origin_data/batch1/武当张资恍/2026-08-28-7679082047969286810/武当张资恍-2026-08-28-7679082047969286810.mp4")
+    device = 0
 
     # 从外部读取
-    input_dir, output_dir, input_video = parse_cli_paths(
+    input_dir, output_dir, input_video, device = parse_cli_paths(
         input_dir,
         output_dir,
         input_video,
+        device,
     )
 
     # 重要参数
@@ -312,8 +310,9 @@ if __name__ == "__main__":
     print(f"开始检测：{input_video}")
     print(f"输出目录：{video_output_dir}")
     print(f"已复制原 JSON：{source_json_output}")
+    print(f"使用 GPU：{device}")
 
-    ranges, fps, frame_count = detect_ranges(input_video)
+    ranges, fps, frame_count = detect_ranges(input_video, device)
 
     print()
     print(f"原视频共 {frame_count} 帧")
@@ -332,6 +331,7 @@ if __name__ == "__main__":
         video_output_dir,
         ranges,
         min_clip_frames,
+        device,
     )
 
     print()
