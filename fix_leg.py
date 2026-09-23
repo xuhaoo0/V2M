@@ -22,6 +22,7 @@ fix_leg函数：
 import argparse
 import json
 import shutil
+import time
 from pathlib import Path
 
 import torch
@@ -225,6 +226,8 @@ def parse_cli_args(
 
 
 if __name__ == "__main__":
+    start_time = time.perf_counter()
+
     # 【用于测试】
     smpl_file = Path("gvhmr_out/xk/xk.pt")
     fix = False  # 命令行叫fix_leg
@@ -237,3 +240,8 @@ if __name__ == "__main__":
     fix_frames = detect_leg(smpl_file, max_fix_frames, device)  # 检测功能
     if fix:
         fix_leg(smpl_file, fix_frames)  # 修复功能
+
+    elapsed_seconds = round(time.perf_counter() - start_time)
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    print(f"leg运行时间：{hours}时{minutes}分{seconds}秒")

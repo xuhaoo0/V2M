@@ -1,13 +1,13 @@
-input_dir: 'origin_data/batch1'  # 输入的根文件夹，里面所有的mp4都会被处理
-output_dir: 'martial_data'  # 输出的根文件夹，会保留输入文件夹的结构
+input_dir: 'origin_data/test'  # 输入的根文件夹，里面所有的mp4都会被处理
+output_dir: 'origin_data/test_out'  # 输出的根文件夹，会保留输入文件夹的结构
 device: [0, 2]  # 可用的gpu
 process_num: 3  # 每张gpu固定启动的进程数
 
 # 是否使用该功能
-split: false
-gvhmr: true
-detect_float: true
-detect_leg: true
+split: true
+gvhmr: false
+detect_float: false
+detect_leg: false
 fix_leg: false
-detect_inpenet: true
+detect_inpenet: false
 fix_inpenet: false

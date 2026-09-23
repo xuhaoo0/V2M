@@ -398,6 +398,8 @@ def parse_cli_args(
 
 
 if __name__ == "__main__":
+    start_time = time.perf_counter()
+
     # 【用于测试】
     smpl_file = Path("gvhmr_out/xk/xk.pt")
     fix = False  # 命令行叫fix_inpenet
@@ -422,7 +424,6 @@ if __name__ == "__main__":
     smooth_iters = 20  # 第二阶段的迭代次数
     lr = 1e-5
 
-    start_time = time.perf_counter()
     model = make_model()
     inpenet_frames = detect_inpenet(smpl_file)  # 检测，几乎不耗时间
     if fix:
@@ -432,8 +433,7 @@ if __name__ == "__main__":
         fix_smooth(backup_file, fixed_file, inpenet_frames)  # 第二阶段，加入平滑
         detect_inpenet(fixed_file)  # 检测第二阶段的结果
 
-    # 输出时间
-    # elapsed_seconds = round(time.perf_counter() - start_time)
-    # hours, remainder = divmod(elapsed_seconds, 3600)
-    # minutes, seconds = divmod(remainder, 60)
-    # print(f"总运行时间：{hours}时{minutes}分{seconds}秒")
+    elapsed_seconds = round(time.perf_counter() - start_time)
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    print(f"inpenet运行时间：{hours}时{minutes}分{seconds}秒")

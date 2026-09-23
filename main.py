@@ -45,12 +45,30 @@ import subprocess
 import sys
 import time
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
+
+
+def find_source_json(input_video):
+    """查找原视频目录下唯一的 JSON 文件。"""
+    json_files = sorted(input_video.parent.glob("*.json"))
+
+    if not json_files:
+        raise FileNotFoundError(
+            f"未找到原视频目录下的 JSON：{input_video.parent}"
+        )
+    if len(json_files) > 1:
+        raise RuntimeError(
+            f"原视频目录下存在多个 JSON，无法确定要复制的文件："
+            f"{', '.join(map(str, json_files))}"
+        )
+
+    return json_files[0]
 
 
 def run_script(script, *args, log_file=None):
@@ -80,10 +98,16 @@ def get_clip_videos(input_video, input_dir, output_dir, split, log_file=None):
         )
         return sorted(video_output_dir.glob("*/*.mp4"))
     # 如果不切视频，还是用原视频构造一个001切片，方便后续处理
+    source_json = find_source_json(input_video)
+
     clip_name = f"{input_video.stem}-001"
     clip_video = video_output_dir / clip_name / f"{clip_name}.mp4"
     clip_video.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(input_video, clip_video)
+    shutil.copy2(
+        source_json,
+        video_output_dir / f"{input_video.stem}.json",
+    )
     return [clip_video]
 
 
@@ -318,6 +342,10 @@ if __name__ == "__main__":
     进程组id会写在上面的log里面：假设是12345
     杀死进程组：kill -TERM -12345
     '''
-    print(f"进程组：{os.getpgrp()}", flush=True)
-    mp.set_start_method("spawn", force=True)
-    main()
+    print(f"开始时间：{datetime.now():%Y年%m月%d日%H时%M分%S秒}", flush=True)
+    try:
+        print(f"进程组：{os.getpgrp()}", flush=True)
+        mp.set_start_method("spawn", force=True)
+        main()
+    finally:
+        print(f"结束时间：{datetime.now():%Y年%m月%d日%H时%M分%S秒}", flush=True)

@@ -29,6 +29,7 @@ args:
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 import torch
@@ -113,6 +114,8 @@ def parse_cli_args(smpl_file: Path, device: int) -> tuple[Path, str]:
 
 
 if __name__ == "__main__":
+    start_time = time.perf_counter()
+
     # 【用于测试】
     smpl_file = Path("gvhmr_out/xk/xk.pt")
     device = 0
@@ -132,3 +135,8 @@ if __name__ == "__main__":
     detect_groundpnt(frame_min_y, json_file, penetration_threshold)
     detect_float(frame_min_y, json_file, float_threshold)
     print(f"检测结果：{json_file}")
+
+    elapsed_seconds = round(time.perf_counter() - start_time)
+    hours, remainder = divmod(elapsed_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    print(f"float运行时间：{hours}时{minutes}分{seconds}秒")
