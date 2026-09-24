@@ -414,8 +414,8 @@ if __name__ == "__main__":
     smooth_weight = 200000.0
 
     batch_size = 8
-    n_points_uniform = 300
-    min_collision_samples = 2  # 【需要调整】
+    n_points_uniform = 300  # 采样n个点
+    min_collision_samples = 5  # 如果有k个点都在两个部位，则判定为穿模【需要调整】
     seed = 0
 
     max_iters = 200  # 第一阶段最大迭代次数

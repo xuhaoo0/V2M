@@ -306,8 +306,8 @@ if __name__ == "__main__":
         device,
     )
 
-    # 重要参数【可能需要加大】
-    min_clip_frames = 20     # 少于该帧数的切片直接丢弃
+    # 【可能需要加大】
+    min_clip_frames = 20  # 少于该帧数的切片直接丢弃
 
     video_output_dir = get_video_output_dir(
         input_video,
