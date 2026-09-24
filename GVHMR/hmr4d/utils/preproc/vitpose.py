@@ -32,6 +32,7 @@ class VitPoseExtractor:
         L, _, H, W = imgs.shape  # (L, 3, H, W)
         batch_size = 16
         vitpose = []
+        print("gvhmr: start ViTPose inference", flush=True)
         for j in tqdm(range(0, L, batch_size), desc="ViTPose", leave=self.tqdm_leave):
             # Heat map
             imgs_batch = imgs[j : j + batch_size, :, :, 32:224].cuda()

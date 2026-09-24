@@ -20,6 +20,18 @@ from GVHMR.hmr4d.utils.video_io_utils import get_writer
 from GVHMR.hmr4d.utils.vis.renderer import Renderer, get_global_cameras_static, get_ground_params_from_points
 
 
+def get_render_size(width, height, render_scale):
+    """按照给定比例缩放画面，并确保输出高度满足常见视频编码要求。"""
+    if not 0 < render_scale <= 1:
+        raise ValueError(
+            f"render_scale 必须在 (0, 1] 范围内，当前值为 {render_scale}"
+        )
+
+    render_width = max(1, round(width * render_scale))
+    render_height = max(2, round(height * render_scale / 2) * 2)
+    return render_width, render_height
+
+
 def standardize_motion(vertices, joints, facing_direction):
     """根据整段动作估计地面，并以第一帧为基准平移和旋转。"""
     offset = joints[0, 0].clone()
@@ -129,7 +141,24 @@ def get_params(input_path, device):
 
 
 @torch.inference_mode()
-def visualize(smplx_params, output_path, width, height, fps, device, camera_beta, axis_length, facing_direction):
+def visualize(
+    smplx_params,
+    output_path,
+    width,
+    height,
+    fps,
+    device,
+    camera_beta,
+    axis_length,
+    facing_direction,
+    render_scale=1.0,
+):
+    width, height = get_render_size(width, height, render_scale)
+    print(
+        f"渲染分辨率：{width}x{height} "
+        f"（缩放参数：{render_scale}）"
+    )
+
     # 由参数生成人体网格和关节
     smplx = make_smplx("supermotion").eval().to(device)
     smplx_output = smplx(**smplx_params)
@@ -180,10 +209,11 @@ def visualize(smplx_params, output_path, width, height, fps, device, camera_beta
 
 if __name__ == "__main__":
     # 直接在这里修改输入路径
-    input_path = Path("gvhmr_out/xk/xk.pt")
-    output_path = input_path.with_suffix(".mp4")
+    input_path = Path("origin_data/test_visualcompare/张资晃/武当张资恍-2026-08-28-7679082047969286810-001.pt")
+    output_path = input_path.with_name(f"{input_path.stem}-smpl.mp4")
     device = "cuda"  # 没有显卡时改成 "cpu"
     facing_direction = "+Z"  # 可选："+X"或"+Z"
+    render_scale = 0.5  # 缩小分辨率，提高渲染速度
 
     width = 720
     height = 1280
@@ -192,4 +222,15 @@ if __name__ == "__main__":
     axis_length = 0.5  # 坐标轴长度，单位为米
 
     smplx_params = get_params(input_path, device)
-    visualize(smplx_params, output_path, width, height, fps, device, camera_beta, axis_length, facing_direction)
+    visualize(
+        smplx_params,
+        output_path,
+        width,
+        height,
+        fps,
+        device,
+        camera_beta,
+        axis_length,
+        facing_direction,
+        render_scale,
+    )

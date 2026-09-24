@@ -106,6 +106,7 @@ def parse_args_to_cfg():
     if not Path(cfg.video_path).exists() or get_video_lwh(video_path)[0] != get_video_lwh(cfg.video_path)[0]:
         reader = get_video_reader(video_path)
         writer = get_writer(cfg.video_path, fps=30, crf=CRF)
+        print("gvhmr: start copy original video", flush=True)
         for img in tqdm(reader, total=get_video_lwh(video_path)[0], desc=f"Copy"):
             writer.write_frame(img)
         writer.close()
@@ -214,6 +215,7 @@ def run_preprocess(cfg):
                 K_fullimg = estimate_K(width, height)
                 intrinsics = convert_K_to_K4(K_fullimg)
                 slam = SLAMModel(video_path, width, height, intrinsics, buffer=4000, resize=0.5)
+                print("gvhmr: start DPVO tracking", flush=True)
                 bar = tqdm(total=length, desc="DPVO")
                 while True:
                     ret = slam.track()
@@ -286,6 +288,7 @@ def render_incam(cfg):
     # -- render mesh -- #
     verts_incam = pred_c_verts
     writer = get_writer(incam_video_path, fps=30, crf=CRF)
+    print("gvhmr: start rendering incam video", flush=True)
     for i, img_raw in tqdm(enumerate(reader), total=get_video_lwh(video_path)[0], desc=f"Rendering Incam"):
         img = renderer.render_mesh(verts_incam[i].cuda(), img_raw, [0.8, 0.8, 0.8])
 
@@ -354,6 +357,7 @@ def render_global(cfg):
 
     render_length = length if not debug_cam else 8
     writer = get_writer(global_video_path, fps=30, crf=CRF)
+    print("gvhmr: start rendering global video", flush=True)
     for i in tqdm(range(render_length), desc=f"Rendering Global"):
         cameras = renderer.create_camera(global_R[i], global_T[i])
         img = renderer.render_with_ground(verts_glob[[i]], color[None], cameras, global_lights)
@@ -399,6 +403,7 @@ def render_incam_global(cfg):
 
     reader = get_video_reader(cfg.video_path)
     writer = get_writer(output_path, fps=30, crf=CRF)
+    print("gvhmr: start rendering incam and global video", flush=True)
     for i, img_raw in tqdm(enumerate(reader), total=length, desc="Rendering Incam+Global"):
         incam_img = incam_renderer.render_mesh(incam_verts[i].cuda(), img_raw, [0.8, 0.8, 0.8])
         cameras = global_renderer.create_camera(global_R[i], global_T[i])
@@ -435,4 +440,4 @@ if __name__ == "__main__":
     # ===== Render ===== #
     # render_incam(cfg)
     # render_global(cfg)
-    render_incam_global(cfg)
+    # render_incam_global(cfg)  # 暂时关闭可视化渲染

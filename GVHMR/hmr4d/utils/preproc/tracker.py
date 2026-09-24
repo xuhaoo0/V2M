@@ -29,6 +29,7 @@ class Tracker:
         }
         results = self.yolo.predict(video_path, **cfg)
         detections = []
+        print("gvhmr: start YOLO person detection", flush=True)
         for result in tqdm(results, total=get_video_lwh(video_path)[0], desc="YoloV8 Detection"):
             if result.boxes is None or len(result.boxes) == 0:
                 detections.append(None)

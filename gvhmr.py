@@ -32,6 +32,8 @@ def run_gvhmr(
     """调用 GVHMR 重建视频。"""
     env = os.environ.copy()
     env["CUDA_VISIBLE_DEVICES"] = str(device)
+    # 注释下一行即可恢复 GVHMR 子进程中的所有 tqdm 进度条。
+    env["TQDM_DISABLE"] = "1"
 
     command = [
         sys.executable,
@@ -41,7 +43,14 @@ def run_gvhmr(
         "--output_root",
         str(output_root.resolve()),
     ]
-    subprocess.run(command, cwd=gvhmr_root, env=env, check=True)
+    try:
+        subprocess.run(command, cwd=gvhmr_root, env=env, check=True)
+    except subprocess.CalledProcessError as error:
+        # demo.py 用退出码 2 表示该切片没有检测到人物。保留这个
+        # 专用退出码，让上层批处理能够跳过当前切片并继续处理。
+        if error.returncode == 2:
+            raise SystemExit(2) from None
+        raise
 
 
 def copy_result(output_dir: Path, output_pt: Path) -> None:

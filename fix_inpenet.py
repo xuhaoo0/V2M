@@ -415,7 +415,7 @@ if __name__ == "__main__":
 
     batch_size = 8
     n_points_uniform = 300
-    min_collision_samples = 2
+    min_collision_samples = 2  # 【需要调整】
     seed = 0
 
     max_iters = 200  # 第一阶段最大迭代次数

@@ -150,12 +150,22 @@ def process_video(
         smpl_file = clip_video.with_suffix(".pt")
 
         if config["gvhmr"]:
-            run_script(
-                "gvhmr.py",
-                "--input_video", clip_video,
-                "--device", device,
-                log_file=log_file,
-            )
+            try:
+                run_script(
+                    "gvhmr.py",
+                    "--input_video", clip_video,
+                    "--device", device,
+                    log_file=log_file,
+                )
+            except subprocess.CalledProcessError as error:
+                if error.returncode == 2:
+                    print(
+                        f"skipped_no_person, clip: {clip_video}",
+                        file=log_file,
+                        flush=True,
+                    )
+                    continue
+                raise
 
         if config["detect_leg"]:
             run_script(
@@ -370,7 +380,7 @@ if __name__ == "__main__":
     '''
     注意，这个脚本是多卡多进程的，谨慎运行
     启动命令：nohup python -u main.py > main.log 2>&1 &
-    进程组id会写在上面的log里面：假设是12345
+    进程组id会写在上面的log里：假设是12345
     杀死进程组：kill -TERM -12345
     '''
     print(f"开始时间：{datetime.now():%Y年%m月%d日%H时%M分%S秒}", flush=True)

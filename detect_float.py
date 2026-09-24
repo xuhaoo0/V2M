@@ -125,7 +125,7 @@ if __name__ == "__main__":
 
     json_file = smpl_file.with_suffix(".json")
     batch_size = 64
-    penetration_threshold = -0.2  # 这两个阈值有待修改
+    penetration_threshold = -0.2  # 【两个阈值需要调整】
     float_threshold = 0.2
 
     frame_min_y, ground_y = get_frame_min_y(smpl_file, device, batch_size)

@@ -38,6 +38,7 @@ class SimpleVO:
         solver: TwoPairSolver = TwoPairSolver(camera_params, solver="pycolmap")
 
         # TODO:We should use different pipelines for different methods
+        print("gvhmr: start visual odometry", flush=True)
         T_w2c_list = self.process_video_T_w2c_list_np(frames, matcher, solver)
 
         # Interpolate missing frames

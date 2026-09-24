@@ -78,6 +78,7 @@ class Extractor:
         imgs = imgs.cuda()
         batch_size = 16  # 5GB GPU memory, occupies all CUDA cores of 3090
         features = []
+        print("gvhmr: start HMR2 feature extraction", flush=True)
         for j in tqdm(range(0, F, batch_size), desc="HMR2 Feature", leave=self.tqdm_leave):
             imgs_batch = imgs[j : j + batch_size]
 

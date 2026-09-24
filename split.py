@@ -170,11 +170,19 @@ def split_video(
     if not ranges:
         return []
 
-    if ranges[0][0] != 0 or any(ranges[i][0] != ranges[i - 1][1] for i in range(1, len(ranges))):
-        raise ValueError("当前切分方法要求 ranges 从第 0 帧开始，并且各区间连续")
-
-    segment_boundaries = [start_frame for start_frame, _ in ranges[1:]]
-    segment_boundaries.append(ranges[-1][1])
+    frame_count = get_video_frame_count(input_video)
+    desired_ranges = set(ranges)
+    # 同时使用目标段的起点和终点切分，缺失区间只作为临时补充段。
+    segment_boundaries = sorted({
+        frame
+        for start_frame, end_frame in ranges
+        for frame in (start_frame, end_frame)
+        if 0 < frame < frame_count
+    })
+    expected_ranges = list(zip(
+        [0, *segment_boundaries],
+        [*segment_boundaries, frame_count],
+    ))
     force_keyframes = "+".join(f"eq(n,{frame})" for frame in segment_boundaries)
 
     with tempfile.TemporaryDirectory(prefix=".split_segments_", dir=video_output_dir) as temp_dir:
@@ -186,11 +194,16 @@ def split_video(
             "-i", str(input_video), "-map", "0:v:0", "-an", "-vsync", "0",
             "-c:v", "h264_nvenc", "-gpu", str(device), "-preset", "p1",
             "-rc", "vbr", "-cq", "23", "-b:v", "0", "-forced-idr", "1",
-            "-force_key_frames", f"expr:{force_keyframes}",
-            "-f", "segment", "-segment_format", "mp4",
-            "-segment_frames", ",".join(map(str, segment_boundaries)),
-            "-reset_timestamps", "1", str(temp_output_pattern),
         ]
+        if segment_boundaries:
+            command.extend([
+                "-force_key_frames", f"expr:{force_keyframes}",
+                "-f", "segment", "-segment_format", "mp4",
+                "-segment_frames", ",".join(map(str, segment_boundaries)),
+                "-reset_timestamps", "1", str(temp_output_pattern),
+            ])
+        else:
+            command.append(str(temp_dir / "segment-000.mp4"))
 
         try:
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
@@ -200,15 +213,16 @@ def split_video(
         temp_outputs = sorted(temp_dir.glob("segment-*.mp4"))
         output_paths = []
         output_index = 1
-        start_frame = 0
 
-        for temp_output in temp_outputs:
+        for temp_output, (start_frame, end_frame) in zip(temp_outputs, expected_ranges):
             clip_frames = get_video_frame_count(temp_output)
-            end_frame = start_frame + clip_frames
+
+            if (start_frame, end_frame) not in desired_ranges:
+                print(f"丢弃补充片段：frame {start_frame} ~ {end_frame - 1}，共 {clip_frames} 帧")
+                continue
 
             if clip_frames < min_clip_frames:
                 print(f"丢弃短片段：frame {start_frame} ~ {end_frame - 1}，共 {clip_frames} 帧")
-                start_frame = end_frame
                 continue
 
             clip_name = f"{input_video.stem}-{output_index:03d}"
@@ -224,7 +238,6 @@ def split_video(
 
             output_paths.append(output_path)
             output_index += 1
-            start_frame = end_frame
 
     return output_paths
 
@@ -293,7 +306,7 @@ if __name__ == "__main__":
         device,
     )
 
-    # 重要参数
+    # 重要参数【可能需要加大】
     min_clip_frames = 20     # 少于该帧数的切片直接丢弃
 
     video_output_dir = get_video_output_dir(
