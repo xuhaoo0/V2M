@@ -18,6 +18,7 @@
 
 '''
 基本功能：
+norm_30fps：将原视频帧率统一为30 FPS，并覆盖原视频
 split：切一条视频
 gvhmr：重建一条视频（内含2D的左右腿修复）
 fix_leg：判断是否存在左右腿互换
@@ -29,6 +30,8 @@ detect_float：判断是否存在悬空或穿地
 流程：【大量占cpu的操作，都拿出来加锁，保证同一时间只有一个进程能用】
 从config.yml读取所有参数
 遍历input_dir下面的所有mp4
+如果norm_30fps：
+  用命令行调用norm_30fps，将原视频帧率统一为30 FPS
 如果split：
   用命令行调用split
 如果不split：
@@ -90,7 +93,7 @@ def get_clip_videos(
     output_dir,
     split,
     device,
-    split_lock,
+    preprocess_lock,
     log_file=None,
 ):
     relative_path = input_video.relative_to(input_dir)
@@ -98,8 +101,8 @@ def get_clip_videos(
     # 切视频
     if split:
         print(f"等待 split：{input_video}", flush=True)
-        # 所有 worker 共用这一把锁，同一时间只运行一个 split.py。
-        with split_lock:
+        # 所有 worker 共用这一把预处理锁。
+        with preprocess_lock:
             print(f"开始 split：{input_video}", flush=True)
             run_script(
                 "split.py",
@@ -131,18 +134,31 @@ def process_video(
     output_dir,
     config,
     device,
-    split_lock,
+    preprocess_lock,
     log_file,
 ):
     """在固定GPU上处理一条原始视频及其所有切片。"""
     start_time = time.perf_counter()
+
+    if config["norm_30fps"]:
+        print(f"等待 norm_30fps：{input_video}", flush=True)
+        with preprocess_lock:
+            print(f"开始 norm_30fps：{input_video}", flush=True)
+            run_script(
+                "norm_30fps.py",
+                "--input_video", input_video,
+                "--device", device,
+                log_file=log_file,
+            )
+        print(f"结束 norm_30fps：{input_video}", flush=True)
+
     clip_videos = get_clip_videos(
         input_video,
         input_dir,
         output_dir,
         config["split"],
         device,
-        split_lock,
+        preprocess_lock,
         log_file,
     )
 
@@ -213,7 +229,7 @@ def worker(
     input_dir,
     output_dir,
     config,
-    split_lock,
+    preprocess_lock,
     log_dir,
     completed_count,
     total_tasks,
@@ -249,7 +265,7 @@ def worker(
                         output_dir,
                         config,
                         gpu_id,
-                        split_lock,
+                        preprocess_lock,
                         log_file,
                     )
                     print(
@@ -287,7 +303,7 @@ def launch_processes(
     input_dir,
     output_dir,
     config,
-    split_lock,
+    preprocess_lock,
     log_dir,
     completed_count,
     total_tasks,
@@ -304,7 +320,7 @@ def launch_processes(
                     input_dir,
                     output_dir,
                     config,
-                    split_lock,
+                    preprocess_lock,
                     log_dir,
                     completed_count,
                     total_tasks,
@@ -335,8 +351,8 @@ def run_on_multigpu(input_videos, input_dir, output_dir, config):
 
     task_queue = collect_tasks(input_videos)
     completed_count = mp.Value("i", 0)
-    # 只限制 split 阶段，后续重建和检测仍可由多个 worker 并行执行。
-    split_lock = mp.Lock()
+    # 帧率标准化和 split 共用一把锁，后续阶段仍可并行执行。
+    preprocess_lock = mp.Lock()
     total_tasks = len(input_videos)
     print(
         f"***** total {total_tasks} videos, GPUs: {gpu_list}, "
@@ -349,7 +365,7 @@ def run_on_multigpu(input_videos, input_dir, output_dir, config):
         input_dir,
         output_dir,
         config,
-        split_lock,
+        preprocess_lock,
         log_dir,
         completed_count,
         total_tasks,
