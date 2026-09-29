@@ -5,8 +5,7 @@ args:
 - input_video，例如a/b/c/c-001/c-001.mp4
 
 输出：
-output_root取input_video的a/b/c/c-001
-a/b/c/c-001/c-001文件夹
+所有结果保存在a/b/c/c-001/c-001文件夹
 最后把上面的文件夹里面的pt复制一份，存为a/b/c/c-001/c-001.pt
 '''
 
