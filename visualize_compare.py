@@ -10,7 +10,7 @@ main 中可配置：
 - facing_direction，右侧第一帧朝向，可选 +X 或 +Z
 
 输入视频：a/b/c.mp4
-输出视频：a/b/c-compare.mp4
+输出视频：a/b/c_compare.mp4
 
 左侧是在原视频上叠加相机坐标系人体，右侧是带地面的全局坐标系人体。
 '''
@@ -43,7 +43,7 @@ CRF = 23
 def get_input_output_paths(smpl_file):
     """根据 PT 路径得到同名原视频和对比视频路径。"""
     input_video = smpl_file.with_suffix(".mp4")
-    output_video = smpl_file.with_name(f"{smpl_file.stem}-compare.mp4")
+    output_video = smpl_file.with_name(f"{smpl_file.stem}_compare.mp4")
     return input_video, output_video
 
 

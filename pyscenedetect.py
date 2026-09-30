@@ -4,7 +4,7 @@
 args:
 - input_video，例如{input_dir}/a/b/c.mp4
 - input_dir，用于替换路径
-- output_dir，把所有输出放在这下面，例如{output_dir}/a/b/c/c-001/c-001.mp4
+- output_dir，把所有输出放在这下面，例如{output_dir}/a/b/c/c_001/c_001.mp4
 '''
 
 import argparse
@@ -47,14 +47,14 @@ def split_video(
         "scene_list.csv",
         "split-video",
         "--filename",
-        "$VIDEO_NAME-$SCENE_NUMBER",
+        "$VIDEO_NAME_$SCENE_NUMBER",
     ]
     subprocess.run(command, check=True)
 
 
 def organize_clips(video_output_dir: Path, video_name: str) -> list[Path]:
     """把每个视频片段放进同名文件夹。"""
-    clip_paths = sorted(video_output_dir.glob(f"{video_name}-*.mp4"))
+    clip_paths = sorted(video_output_dir.glob(f"{video_name}_*.mp4"))
     output_paths = []
 
     for clip_path in clip_paths:

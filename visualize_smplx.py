@@ -210,7 +210,7 @@ def visualize(
 if __name__ == "__main__":
     # 直接在这里修改输入路径
     input_path = Path("origin_data/test_visualcompare/张资晃/武当张资恍-2026-08-28-7679082047969286810-001.pt")
-    output_path = input_path.with_name(f"{input_path.stem}-smpl.mp4")
+    output_path = input_path.with_name(f"{input_path.stem}_smpl.mp4")
     device = "cuda"  # 没有显卡时改成 "cpu"
     facing_direction = "+Z"  # 可选："+X"或"+Z"
     render_scale = 0.5  # 缩小分辨率，提高渲染速度

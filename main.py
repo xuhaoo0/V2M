@@ -17,25 +17,25 @@ detect_float：判断是否存在悬空或穿地
 如果split：
   用命令行调用split
 如果不split：
-  直接用该mp4作为“-001”构建类似“split”的结果
+  直接用该mp4作为“_001”构建类似“split”的结果
 对切出来的每个视频（结合config.yml里面的字段决定是否调用该py、传入的参数值是什么）：
   用命令行调用gvhmr、fix_leg、fix_inpenet、detect_float
 '''
 
 '''
 输出示例：
-假设处理的视频是：{input_dir}/a/b/c.mp4
+假设处理的视频是：{input_dir}/a/b/c.mp4、同目录的可选json文件
 {output_dir}
-- a/b/c  # 需要切视频
-  - c-001
-    - c-001.mp4  # from split
-    - c-001  # from gvhmr
+- a/b/c【本质上就是会为每个视频建一个文件夹，并为它的切片视频建文件夹】
+  - c_001
+    - c_001.mp4  # from split
+    - c_001  # from gvhmr
       - xxx.pt
       - xxx.mp4
-    - c-001.json  # from detect_xxx
-    - c-001.pt  # from gvhmr
-    - c-001-fix-xxx # from fix_xxx
-  - c-002
+    - c_001.json  # from detect_xxx
+    - c_001.pt  # from gvhmr
+    - c_001_fix_xxx # from fix_xxx
+  - c_002
     ...
 '''
 
@@ -59,13 +59,11 @@ PROJECT_DIR = Path(__file__).resolve().parent
 
 
 def find_source_json(input_video):
-    """查找原视频目录下唯一的 JSON 文件。"""
+    """查找原视频目录下唯一的 JSON 文件；不存在则返回 None。"""
     json_files = sorted(input_video.parent.glob("*.json"))
 
     if not json_files:
-        raise FileNotFoundError(
-            f"未找到原视频目录下的 JSON：{input_video.parent}"
-        )
+        return None
     if len(json_files) > 1:
         raise RuntimeError(
             f"原视频目录下存在多个 JSON，无法确定要复制的文件："
@@ -118,14 +116,17 @@ def get_clip_videos(
     # 如果不切视频，还是用原视频构造一个001切片，方便后续处理
     source_json = find_source_json(input_video)
 
-    clip_name = f"{input_video.stem}-001"
+    clip_name = f"{input_video.stem}_001"
     clip_video = video_output_dir / clip_name / f"{clip_name}.mp4"
     clip_video.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(input_video, clip_video)
-    shutil.copy2(
-        source_json,
-        video_output_dir / f"{input_video.stem}.json",
-    )
+    if source_json is not None:
+        shutil.copy2(
+            source_json,
+            video_output_dir / f"{input_video.stem}.json",
+        )
+    else:
+        print(f"未找到配套 JSON，跳过复制：{input_video}", flush=True)
     return [clip_video]
 
 

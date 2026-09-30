@@ -8,6 +8,8 @@
 args:
 - input_video，例如{input_dir}/a/b/c.mp4
 - device，例如0
+
+输出直接覆盖原视频
 '''
 
 import argparse
@@ -58,7 +60,7 @@ def normalize_video_fps(
 ) -> None:
     """使用 NVDEC + NVENC 将视频帧率统一为 30 FPS，并覆盖原视频。"""
     temporary_dir = tempfile.TemporaryDirectory(
-        prefix=f".{input_video.stem}-30fps-",
+        prefix=f".{input_video.stem}_30fps_",
         dir=input_video.parent,
     )
     temporary_video = Path(temporary_dir.name) / input_video.name

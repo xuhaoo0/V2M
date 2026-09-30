@@ -9,7 +9,7 @@
 args:
 - input_video，例如{input_dir}/a/b/c.mp4
 - input_dir，用于替换路径
-- output_dir，把所有输出放在这下面，例如{output_dir}/a/b/c/c-001/c-001.mp4
+- output_dir，把所有输出放在这下面，例如{output_dir}/a/b/c/c_001/c_001.mp4
 - device，例如0
 '''
 
@@ -88,14 +88,12 @@ def get_video_frame_count(input_video: Path) -> int:
 def copy_source_json(
     input_video: Path,
     video_output_dir: Path,
-) -> Path:
-    """把原视频目录下的 JSON 改为视频同名后复制到输出目录。"""
+) -> Path | None:
+    """把原视频目录下的 JSON 改为视频同名后复制到输出目录；没有 JSON 时跳过。"""
     json_files = sorted(input_video.parent.glob("*.json"))
 
     if not json_files:
-        raise FileNotFoundError(
-            f"未找到原视频目录下的 JSON：{input_video.parent}"
-        )
+        return None
     if len(json_files) > 1:
         raise RuntimeError(
             f"原视频目录下存在多个 JSON，无法确定要复制的文件："
@@ -187,7 +185,7 @@ def split_video(
 
     with tempfile.TemporaryDirectory(prefix=".split_segments_", dir=video_output_dir) as temp_dir:
         temp_dir = Path(temp_dir)
-        temp_output_pattern = temp_dir / "segment-%03d.mp4"
+        temp_output_pattern = temp_dir / "segment_%03d.mp4"
         command = [
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-hwaccel", "cuda", "-hwaccel_device", str(device), "-hwaccel_output_format", "cuda",
@@ -203,14 +201,14 @@ def split_video(
                 "-reset_timestamps", "1", str(temp_output_pattern),
             ])
         else:
-            command.append(str(temp_dir / "segment-000.mp4"))
+            command.append(str(temp_dir / "segment_000.mp4"))
 
         try:
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         except subprocess.CalledProcessError as error:
             raise RuntimeError(f"FFmpeg 切分视频失败：\n{error.stderr.strip()}") from error
 
-        temp_outputs = sorted(temp_dir.glob("segment-*.mp4"))
+        temp_outputs = sorted(temp_dir.glob("segment_*.mp4"))
         output_paths = []
         output_index = 1
 
@@ -225,7 +223,7 @@ def split_video(
                 print(f"丢弃短片段：frame {start_frame} ~ {end_frame - 1}，共 {clip_frames} 帧")
                 continue
 
-            clip_name = f"{input_video.stem}-{output_index:03d}"
+            clip_name = f"{input_video.stem}_{output_index:03d}"
             clip_dir = video_output_dir / clip_name
             clip_dir.mkdir(parents=True, exist_ok=True)
             output_path = clip_dir / f"{clip_name}.mp4"
@@ -322,7 +320,10 @@ if __name__ == "__main__":
 
     print(f"开始检测：{input_video}")
     print(f"输出目录：{video_output_dir}")
-    print(f"已复制原 JSON：{source_json_output}")
+    if source_json_output is not None:
+        print(f"已复制原 JSON：{source_json_output}")
+    else:
+        print(f"未找到原 JSON，跳过复制")
     print(f"使用 GPU：{device}")
 
     ranges, fps, frame_count = detect_ranges(input_video, device)
