@@ -1,8 +1,32 @@
 '''
+基本功能：
+norm_30fps：将原视频帧率统一为30 FPS，并覆盖原视频
+split：切一条视频
+gvhmr：重建一条视频（内含2D的左右腿修复）
+fix_leg：判断是否存在左右腿互换以及修正
+fix_inpenet：用VolumetricSMPL判断是否存在穿模以及修正
+detect_float：判断是否存在悬空或穿地
+'''
+
+'''
+流程：【大量占cpu的操作，都拿出来加锁，保证同一时间只有一个进程能用】
+从config.yml读取所有参数
+遍历input_dir下面的所有mp4
+如果norm_30fps：
+  用命令行调用norm_30fps，将原视频帧率统一为30FPS
+如果split：
+  用命令行调用split
+如果不split：
+  直接用该mp4作为“-001”构建类似“split”的结果
+对切出来的每个视频（结合config.yml里面的字段决定是否调用该py、传入的参数值是什么）：
+  用命令行调用gvhmr、fix_leg、fix_inpenet、detect_float
+'''
+
+'''
 输出示例：
-假设处理的视频是{input_dir}/a/b/c.mp4
+假设处理的视频是：{input_dir}/a/b/c.mp4
 {output_dir}
-- a/b/c
+- a/b/c  # 需要切视频
   - c-001
     - c-001.mp4  # from split
     - c-001  # from gvhmr
@@ -13,32 +37,9 @@
     - c-001-fix-xxx # from fix_xxx
   - c-002
     ...
-
 '''
 
-'''
-基本功能：
-norm_30fps：将原视频帧率统一为30 FPS，并覆盖原视频
-split：切一条视频
-gvhmr：重建一条视频（内含2D的左右腿修复）
-fix_leg：判断是否存在左右腿互换
-fix_inpenet：用VolumetricSMPL判断是否存在穿模以及修正
-detect_float：判断是否存在悬空或穿地
-'''
 
-'''
-流程：【大量占cpu的操作，都拿出来加锁，保证同一时间只有一个进程能用】
-从config.yml读取所有参数
-遍历input_dir下面的所有mp4
-如果norm_30fps：
-  用命令行调用norm_30fps，将原视频帧率统一为30 FPS
-如果split：
-  用命令行调用split
-如果不split：
-  直接用该mp4作为“-001”构建类似“切视频”的结果
-对切出来的每个视频（结合config.yml里面的字段决定是否调用该py、传入的参数值是什么）：
-  用命令行调用gvhmr、fix_leg、fix_inpenet、detect_float
-'''
 
 import multiprocessing as mp
 import os

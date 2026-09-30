@@ -5,7 +5,7 @@ process_num: 3  # 每张gpu固定启动的进程数
 
 # 是否使用该功能
 norm_30fps: true
-split: true  # 建议使用
+split: true
 gvhmr: true
 detect_float: true
 detect_leg: true
